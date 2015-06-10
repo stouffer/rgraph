@@ -119,7 +119,8 @@ FCreatePartition(FILE *inF)
   struct group *g = NULL;
   struct group *part = NULL;
   int npart = 0;
-
+  int noReadItems;
+  
   /* Create the header of the partition */
   part = CreateHeaderGroup();
 
@@ -127,10 +128,16 @@ FCreatePartition(FILE *inF)
   while (!feof(inF)) {
     g = CreateGroup(part, npart);
     npart++;
-    fscanf(inF, "%s\n", &label[0]);
+    noReadItems = fscanf(inF, "%s\n", &label[0]);
+	if (noReadItems != 1)
+	  printf ("Failed to read input, incorrect field number (%d != 1)\n",noReadItems);
+
     while (strcmp(label, separator) != 0) {
       AddNodeToGroupSoft(g, label);
-      fscanf(inF, "%s\n", &label[0]);
+      noReadItems = fscanf(inF, "%s\n", &label[0]);
+	  if (noReadItems != 1)
+		printf ("Failed to read input, incorrect field number (%d != 1)\n",noReadItems);
+
     }
   }
 
@@ -333,13 +340,17 @@ AddNodeToGroup(struct group *g, struct node_gra *node)
   return p->next;
 }
 
-/* a la DB Stouffer */
+/**
+@brief Add a node to a graph without fully updating the group properties.
+@author DB Stouffer 
+
+Like AddNodeToGroup() but the group properties totlinks, inlinks,
+outlinks and their weighted counterpart are not updated.
+**/
 struct node_lis *
 AddNodeToGroupFast(struct group *g, struct node_gra *node)
 {
   struct node_lis *p = g->nodeList;
-  int totlink, inlink;
-  double totweight, inweight;
 
   /* Go to the end of the list of nodes in the group */
   while (p->next != NULL)
@@ -357,18 +368,8 @@ AddNodeToGroupFast(struct group *g, struct node_gra *node)
   (p->next)->btw=0.0;  /* initalising rush variable to 0.0; */
   (p->next)->weight=0.0;  /* initalising rush variable to 0.0; */
 
-  /* Update the properties of the group */
+  /* Partially update the properties of the group */
   g->size++;
-/*  totlink = CountLinks(node);
-  inlink = NLinksToGroup(node, g);
-  totweight = NodeStrengthFast(node);
-  inweight = StrengthToGroup(node, g);
-  g->totlinks += totlink - inlink;
-  g->inlinks += inlink;
-  g->outlinks = g->totlinks - g->inlinks;
-  g->totlinksW += totweight - inweight;
-  g->inlinksW += inweight;
-  g->outlinksW = g->totlinksW - g->inlinksW;*/
 
   /* Update the properties of the node */
   node->inGroup = g->label;
@@ -455,14 +456,21 @@ RemoveNodeFromGroup(struct group *g, struct node_gra *node)
   }
 }
 
-/* a la DB Stouffer */
+/**
+@brief Remove a node from a group without fully updating the group properties.
+@author DB Stouffer 
+
+Returns 1 if the node has been successfully removed and 0 if the node
+is not found in the group. 
+
+Like RemoveNodeFromGroup() but the group properties totlinks, inlinks,
+outlinks and their weighted counterpart are not updated.
+*/
 int 
 RemoveNodeFromGroupFast(struct group *g, struct node_gra *node)
 {
   struct node_lis *p = g->nodeList;
   struct node_lis *temp;
-  int totlink,inlink;
-  double totweight,inweight;
 
   /* Find the node */
   while ((p->next != NULL) && ((p->next)->ref != node))
@@ -476,19 +484,9 @@ RemoveNodeFromGroupFast(struct group *g, struct node_gra *node)
     free(temp->nodeLabel);
     free(temp);
 
-    /* Update the properties of the group */
+    /* Partially update the properties of the group */
     g->size--;
-/*    totlink = CountLinks(node);
-    inlink = NLinksToGroup(node, g);
-    totweight = NodeStrengthFast(node);
-    inweight = StrengthToGroup(node, g);
-    g->totlinks -= totlink - inlink;
-    g->inlinks -= inlink;
-    g->outlinks = g->totlinks - g->inlinks;
-    g->totlinksW -= totweight - inweight;
-    g->inlinksW -= inweight;
-    g->outlinksW = g->totlinksW - g->inlinksW;*/
-
+	
     /* Done */
     return 1;
   }
@@ -510,13 +508,22 @@ MoveNode(struct node_gra *node, struct group *old, struct group *new)
   return 1;
 }
 
-/* a la DB Stouffer */
+/**
+@brief Move a node from a group without fully updating the group properties.
+@author DB Stouffer 
+
+Returns 1 if the node has been successfully removed and 0 if the node
+is not in the old group. 
+
+Like MoveNode() but the group properties totlinks, inlinks,
+outlinks and their weighted counterpart are not updated.
+*/
 int
 MoveNodeFast(struct node_gra *node, struct group *old, struct group *new)
 {
   if (RemoveNodeFromGroupFast(old,node) == 0)
     return 0;
-
+  
   AddNodeToGroupFast(new, node);
   return 1;
 }
@@ -684,14 +691,14 @@ RemoveBetweenGroupLinks(struct group *part, int symmetric_sw)
   ALL CALCULATIONS ARE RIGHT BEFORE USING!!!!!!!!!!
   ---------------------------------------------------------------------
 */
-double **
+void
 BlockModel(struct group *part, char type_sw, int list_sw)
 {
   struct group *g1, *g2;
   int links = 0;
   int nodes = 0;
   double prob;
-  double bij, av, sig;
+  double bij=0, av, sig;
 
   /* Count the total number of nodes and links, and the average
      linking probability */
@@ -771,8 +778,6 @@ BlockModel(struct group *part, char type_sw, int list_sw)
       }
     }
   }
-
-  return;
 }
 
 /*
@@ -831,6 +836,9 @@ NLinksToGroupByNum(struct node_gra* node, int gLabel)
   return inlink;
 }
 
+
+
+
 /*
   ---------------------------------------------------------------------
   Weight of links from a node to a given group
@@ -844,6 +852,23 @@ StrengthToGroup(struct node_gra* node, struct group *g)
 
   while ((nei = nei->next) != NULL)
     if ((nei->ref)->inGroup == g->label)
+      inlink += nei->weight;
+  
+  return inlink;
+}
+
+/**
+Weight of links from a node to a given group, based on the label of
+the group only.
+**/
+double
+StrengthToGroupByNum(struct node_gra* node, int gLabel)
+{
+  struct node_lis *nei = node->neig;
+  double inlink = 0.0;
+
+  while ((nei = nei->next) != NULL)
+    if ((nei->ref)->inGroup == gLabel)
       inlink += nei->weight;
   
   return inlink;
@@ -1330,7 +1355,7 @@ MapPartToNetSoft(struct group *part, struct node_gra *net)
       node = (*(struct node_tree **)tfind((void *)treeNode,
 					  &nodeDict,
 					  NodeTreeLabelCompare))->ref;
-      FreeNodeTree(treeNode, preorder, 0);
+      FreeNodeTree(treeNode);
       /* Update the properties of the node */
       node->inGroup = g->label;
     }
@@ -1955,7 +1980,7 @@ SACommunityIdent(struct node_gra *net,
   int i;
   struct group *part = NULL;
   struct group *split = NULL, *g = NULL;
-  struct group **glist, *lastg;
+  struct group **glist = NULL, *lastg;
   struct node_gra **nlist;
   struct node_gra *p;
   struct node_lis *nod;
@@ -2321,7 +2346,7 @@ ParticipationCoefficient(struct node_gra *node)
   double P = 0.0;
   int nlink = CountLinks(node);
 
-  /* Go through the neighbors */
+  // Go through the neighbors. 
   if (nlink != 0) {
     while ((nei = nei->next) != NULL) {
       toGroup = NLinksToGroupByNum(node, nei->ref->inGroup);
@@ -2331,6 +2356,42 @@ ParticipationCoefficient(struct node_gra *node)
   }
 
   /* Done */
+  return P;
+}
+
+
+/**
+
+Compute the weighted participation coefficient of a node.
+P_i = 1 - sum_{modules m}(strength_{im} / strength_i)**2
+
+with:
+- strength_i = sum of this node edges weigth. 
+- strength_{im} = sum of this node edges weigth. 
+
+**/
+double 
+WeightedParticipationCoefficient(struct node_gra *node,  struct group *part)
+{
+  double toGroup;
+  double P = 0.0;
+  double strength = NodeStrengthFast(node);
+  double squared_st = strength*strength;
+  //  printf ("%s: %f \n",node->label,strength);
+  int nlink = CountLinks(node);
+  struct group *group=NULL;
+  
+  group = part;
+  if (nlink != 0) {
+	while ((group=group->next) != NULL){
+      toGroup = StrengthToGroup(node, group);
+      P += (toGroup*toGroup) / squared_st;
+    }
+
+    P = 1.0 - P;
+  }
+  //printf ("\n");
+
   return P;
 }
 
@@ -2375,6 +2436,51 @@ WithinModuleRelativeDegree(struct node_gra *node, struct group *part)
   return z;
 }
 
+
+
+
+/**
+Compute the the within-module relative strengh of a node. 
+
+Warning: The network must be properly mapped to the partition under
+consideration.
+**/
+double
+WithinModuleRelativeStrength(struct node_gra *node, struct group *part)
+{
+  struct node_lis *p;
+  double z;
+  struct group *group=NULL;
+
+  double inStrength;
+  double kmean = 0.0, k2mean = 0.0, kstd = 0.0;
+
+  // Find the group of the node
+  group = part;
+  while (group->label != node->inGroup)
+    group = group->next;
+
+  // Go through all the nodes in the group and calculate mean and
+  // standard deviation of the within-module strength 
+  p = group->nodeList;
+  while ((p = p->next) != NULL) {
+    inStrength = StrengthToGroup(p->ref, group);
+    kmean += (double)inStrength;
+    k2mean += (double)inStrength * (double)inStrength;
+  }
+  kmean /= (double)(group->size);
+  k2mean /= (double)(group->size);
+  kstd = sqrt(k2mean - kmean * kmean);
+  
+  // Calculate the z-score
+  if (kstd == 0.0)
+    z = 0.0;
+  else
+    z = ((double)StrengthToGroup(node, group) - kmean) / kstd;
+  return z;
+}
+
+
 /*
   ---------------------------------------------------------------------
   Create a role partition according to the roles defined in Guimera &
@@ -2409,6 +2515,54 @@ CatalogRoleIdent(struct node_gra *net, struct group *mod)
     while ((p = p->next) != NULL) {
       P = ParticipationCoefficient(p->ref);
       z = WithinModuleRelativeDegree(p->ref, g);
+	  dest_group = GetRole(P,z);
+      
+      /* Add (softly) the node to the role group */
+      AddNodeToGroupSoft(glist[dest_group], p->ref->label);
+    } /* End of loop over nodes in this module */
+  } /* End of loop over modules */
+
+  /* Map the role partition onto the network and return*/
+  MapPartToNet(roles, net);
+  return roles;
+}
+
+/*
+  ---------------------------------------------------------------------
+  Create a role partition using the strength of the nodes rather than
+  their degree.
+  
+  CAUTION: At the end of the process, the
+  network is mapped onto the role partition.
+  ---------------------------------------------------------------------
+*/
+struct group *
+CatalogRoleIdentStrength(struct node_gra *net, struct group *mod)
+{
+  struct group *roles = NULL;
+  struct node_lis *p;
+  int nroles = 7;
+  int dest_group;
+  int i;
+  struct group *glist[7];
+  struct group *g;
+  double z, P;
+
+  /* Create the groups */
+  roles = CreateHeaderGroup();
+  MapPartToNet(mod, net);
+  glist[0] = CreateGroup(roles, 0);
+  for (i=1; i<nroles; i++) {
+    glist[i] = CreateGroup(glist[i-1],i);
+  }
+  
+  /* Go through all the groups and assign roles to all the nodes */
+  g = mod;
+  while ((g = g->next) != NULL) {
+    p = g->nodeList;
+    while ((p = p->next) != NULL) {
+	  P = WeightedParticipationCoefficient(p->ref,mod);
+	  z = WithinModuleRelativeStrength(p->ref, g);
 	  dest_group = GetRole(P,z);
       
       /* Add (softly) the node to the role group */

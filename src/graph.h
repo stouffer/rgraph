@@ -5,8 +5,7 @@
 #ifndef RGRAPH_GRAPH_H
 #define RGRAPH_GRAPH_H 1
 
-//#include <search.h>
-#include "lib/search.h"
+#include <search.h>
 #include <gsl/gsl_rng.h>
 
 #define MAX_LABEL_LENGTH 100
@@ -114,9 +113,7 @@ void *MakeLabelDict(struct node_gra *net);
   Node, link, and graph removal
   ---------------------------------------------------------------------
 */
-void FreeNodeTree(struct node_tree *ntree,
-		  VISIT value,
-		  int level);
+void FreeNodeTree(struct node_tree *ntree);
 void FreeNodeLis(struct node_lis *p);
 void FreeAdjacencyList(struct node_lis *p);
 void FreeNode(struct node_gra *node);

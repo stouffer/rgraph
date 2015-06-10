@@ -61,7 +61,7 @@ FBuildNetworkBipart(FILE *inFile,
   struct binet *net=NULL;
   double weight;
   struct node_tree *nodeTree=NULL, *ntree1=NULL, *ntree2=NULL;
-
+  int noReadItems = 0;
   /* Initialize the subnetworks */
   last1 = root1 = CreateHeaderGraph();
   last2 = root2 = CreateHeaderGraph();
@@ -71,11 +71,15 @@ FBuildNetworkBipart(FILE *inFile,
 
     /* Read the labels (and weight, if necessary) */
     if (weight_sw == 0) {
-      fscanf(inFile, "%s %s\n", label1, label2);
-      weight = 1.;
+      noReadItems = fscanf(inFile, "%s %s\n", label1, label2);
+	  if(noReadItems != 2)
+		printf ("Failed to read input: incorrect field number (%d!=2). \n",noReadItems);
+	  weight = 1.;
     }
     else {
-      fscanf(inFile,"%s %s %lf\n", label1, label2, &weight);
+      noReadItems = fscanf(inFile,"%s %s %lf\n", label1, label2, &weight);
+	  if(noReadItems != 3)
+		printf ("Failed to read input: incorrect field number (%d!=3). \n",noReadItems);
     }
 
     
@@ -88,7 +92,7 @@ FBuildNetworkBipart(FILE *inFile,
     if (ntree1->ref == NULL)
       ntree1->ref = last1 = CreateNodeGraph(last1, label1);
     else
-      FreeNodeTree(nodeTree, preorder, 0);
+      FreeNodeTree(nodeTree);
     n1 = ntree1->ref;
 
     nodeTree = CreateNodeTree();
@@ -99,7 +103,7 @@ FBuildNetworkBipart(FILE *inFile,
     if (ntree2->ref == NULL)
       ntree2->ref = last2 = CreateNodeGraph(last2, label2);
     else
-      FreeNodeTree(nodeTree, preorder, 0);
+      FreeNodeTree(nodeTree);
     n2 = ntree2->ref;
 
     /* Create the links */
@@ -108,8 +112,8 @@ FBuildNetworkBipart(FILE *inFile,
   }
 
   /* Free memory */
-  tdestroy(dict1, FreeNodeTree);
-  tdestroy(dict2, FreeNodeTree);
+  FreeLabelDict(dict1);
+  FreeLabelDict(dict2);
 
   /* Create the bipartite network and return */
   net = CreateBipart();
@@ -155,7 +159,6 @@ BuildModularBipartiteNetwork(int *modSizes,
   struct node_gra *root1, *root2;
   struct node_gra **list1, **list2;
   struct node_gra *last_add1 = NULL, *last_add2 = NULL;
-  int orig, dest;
   int teamcol, target;
   int S1 = 0;
   int *module, *mod_starting, n_team_col;
@@ -498,8 +501,8 @@ CopyBipart(struct binet *binet)
   }
 
   /* Free memory */
-  tdestroy(dict1, FreeNodeTree);
-  tdestroy(dict2, FreeNodeTree);
+  FreeLabelDict(dict1);
+  FreeLabelDict(dict2);
   
   /* Done */
   return copy;
@@ -588,7 +591,7 @@ ProjectBipart(struct binet *binet)
   }
 
   /* Free memory and return */
-  tdestroy(dict, FreeNodeTree);
+  FreeLabelDict(dict);
   return projnet;
 }
 
@@ -874,7 +877,6 @@ ModularityBipartWeighted(struct binet *binet, struct group *part)
 */
 double ModularityBipartWeightedFast(struct binet *binet, struct group *part, double **swwmat)
 {
-  struct node_gra *p = binet->net2;
   struct node_lis *n1, *n2;
   double bimod = 0.0;
 
@@ -1051,7 +1053,7 @@ SAGroupSplitBipart(struct group *target_g, struct group *empty_g,
     RemovePartition(split);
     RemoveGraph(net);
     RemoveBipart(binet);
-    tdestroy(dict, FreeNodeTree);
+    FreeLabelDict(dict);
   }
   else {
     free(nlist);
@@ -1081,7 +1083,7 @@ SAGroupSplitBipartWeighted(struct group *target_g, struct group *empty_g,
   struct node_lis *p = NULL;
   int nnod = 0;
   int i;
-  int n1, n2, s1, s2;
+  int n1, n2;
   int target, oldg, newg;
   double dE = 0.0;
   double T;
@@ -1223,7 +1225,7 @@ SAGroupSplitBipartWeighted(struct group *target_g, struct group *empty_g,
     RemovePartition(split);
     RemoveGraph(net);
     RemoveBipart(binet);
-    tdestroy(dict, FreeNodeTree);
+    FreeLabelDict(dict);
   }
   else {
     free(nlist);
@@ -1268,12 +1270,12 @@ SACommunityIdentBipart(struct binet *binet,
   double sms = 0.0, sms2 = 0.0, msfac;
   struct node_gra *p, *p2;
   int nnod;
-  struct group *part = NULL, *g = NULL, *split = NULL;
+  struct group *part = NULL, *g = NULL;
   struct node_gra **nlist;
-  struct group **glist, *lastg;
+  struct group **glist = NULL, *lastg;
   int cicle1, cicle2;
   int count = 0, limit = 25;
-  double energy, energyant, dE, e;
+  double energy, energyant=0.0, dE;
   double T;
   int target, oldg, newg;
   double **cmat;
@@ -1650,12 +1652,12 @@ SACommunityIdentBipartWeighted(struct binet *binet,
   double sWa = 0.0, s2Wa = 0.0, sWa2 = 0.0, Wafac, s;
   struct node_gra *p, *p2;
   int nnod;
-  struct group *part = NULL, *g = NULL, *split = NULL;
+  struct group *part = NULL, *g = NULL;
   struct node_gra **nlist;
-  struct group **glist, *lastg;
+  struct group **glist = NULL, *lastg;
   int cicle1, cicle2;
   int count = 0, limit = 25;
-  double energy, energyant, dE, e;
+  double energy, energyant = 0.0, dE;
   double T;
   int target, oldg, newg;
   char* accepted;
@@ -1835,7 +1837,7 @@ SACommunityIdentBipartWeighted(struct binet *binet,
       
       switch(output_sw) {
       case 'd':
-      	if (dE < 0 && accepted == "ACCEPTED" && (T < Ti/1.0e6)) {
+      	if (dE < 0 && strcmp(accepted,"ACCEPTED")==0 && (T < Ti/1.0e6)) {
           fprintf(stderr, "Cicle 1 move %s: %i move %i -> %i dE=%g prob=%g T=%g\n", accepted, target, oldg, newg, dE, exp(dE/T),T);
         }
 	      accepted = "REJECTED";
@@ -1880,7 +1882,7 @@ SACommunityIdentBipartWeighted(struct binet *binet,
 	  
 	        switch(output_sw) {
           case 'd':
-            if (dE < 0 && accepted == "ACCEPTED" && (T < Ti/1.0e6)) {  
+            if (dE < 0 && strcmp(accepted,"ACCEPTED")==0 && (T < Ti/1.0e6)) {  
 	            fprintf(stderr, "Cicle 2 Merge %s: %i (sz %i) with %i (sz %i) dE=%g prob=%g T=%g\n",
                       accepted, g1, glist[g1]->size, g2, glist[g2]->size, dE, exp(dE/T),T);
 	          }
@@ -1942,7 +1944,7 @@ SACommunityIdentBipartWeighted(struct binet *binet,
 
 	        switch(output_sw) {
 	        case 'd':
-	          if (-dE < 0 && accepted == "ACCEPTED"  && (T < Ti/1.0e6)) {  	    
+	          if (-dE < 0 && strcmp(accepted,"ACCEPTED")==0  && (T < Ti/1.0e6)) {  	    
 	            fprintf(stderr, "Cicle 2 Split %s: %i -> %i (sz %i) and %i (sz %i) dE=%g dE>-en*Epsilon/10=%i prob=%g T=%g\n",
 		                  accepted, target, target, glist[target]->size, empty, glist[empty]->size, -dE, -dE>-fabs(energyant)*EPSILON_MOD_B/10, exp(-dE/T), T);
 	          }
@@ -1995,7 +1997,7 @@ SACommunityIdentBipartWeighted(struct binet *binet,
     }
 
     if ((T < Ti / 1.0e6) && (output_sw == 'd')) {
-      fprintf(stderr, "En Change %: %g (Last En: %g), count: %i",
+      fprintf(stderr, "En Change %%: %g (Last En: %g), count: %i",
 	            (fabs(energy - energyant)/fabs(energyant)), fabs(energyant), count);
     }
 
@@ -2059,12 +2061,13 @@ Example:
 Mynode\t1\tR3\t0.6500\t-1.4400
 **/
 void
-FPrintTabNodesBipart(FILE *outf, struct binet *network,  struct group *modules)
+FPrintTabNodesBipart(FILE *outf, struct binet *network,  struct group *modules, int degree_based)
 {
   struct node_gra *projected;
   struct group    *g = NULL;
   struct node_lis *n = NULL;
   double P, z;
+  int group_nb = 0;
   int role;
 
   // Project the first compoenent of the bipartite network. 
@@ -2076,13 +2079,21 @@ FPrintTabNodesBipart(FILE *outf, struct binet *network,  struct group *modules)
   g = modules;
   while ((g = g->next) != NULL) {
     n = g->nodeList;
+	group_nb ++;
     while ((n = n->next) != NULL) {
-      P = ParticipationCoefficient(n->ref);
-      z = WithinModuleRelativeDegree(n->ref, g);
-	  role = GetRole(P,z) + 1;
-	  printf ("%-20s\t %d\t R%d\t %f\t %f \n",
+	  if (degree_based==1){
+		P = ParticipationCoefficient(n->ref);
+		z = WithinModuleRelativeDegree(n->ref, g);
+		role = GetRole(P,z) + 1;
+	  }
+	  else{
+		P = WeightedParticipationCoefficient(n->ref,modules);
+		z = WithinModuleRelativeStrength(n->ref, g);
+		role = GetRole(P,z) + 1;
+	  }
+	  printf ("%-20s\t%d\tR%d\t%f\t%f\n",
 			  n->nodeLabel,
-			  n->ref->inGroup,
+			  group_nb,
 			  role,
 			  P,
 			  z);
